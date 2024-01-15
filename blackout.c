@@ -50,7 +50,7 @@ void *hydroelectricPlantRoutine(void *arg);
 void *sortingThreadRoutine(void *arg);
 void applyGreedyAlgorithm();
 void insertSorted(HydroelectricPlant *plant);
-int comparePlants(const HydroelectricPlant *a, const HydroelectricPlant *b);
+int comparePlants(HydroelectricPlant *a, HydroelectricPlant *b);
 void sortList();
 void findOptimalCombination();
 void activatePlant(HydroelectricPlant *plant);
@@ -84,7 +84,7 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Error: la suma de las probabilidades debe ser 1.\n");
         return 1;
     }
-
+    printf("ANtes de senal");
     // Configuración del manejador de señales
     struct sigaction sa;
     sa.sa_handler = signalHandler;
@@ -102,22 +102,59 @@ int main(int argc, char *argv[])
     for (int i = 0; i < numH1; ++i)
     {
         HydroelectricPlant *h1 = malloc(sizeof(HydroelectricPlant));
-        *h1 = (HydroelectricPlant){"H1", H1_CAPACITY, 50.0, 200.0, 125.0, 0, PTHREAD_MUTEX_INITIALIZER};
+        if (h1 == NULL)
+        {
+            fprintf(stderr, "Error: NO se pudo reservar memoria para las centrales.\n");
+            return -1;
+        }
+
+        h1->name = "H1";
+        h1->capacity = H1_CAPACITY;
+        h1->minWaterLevel = 50.0;
+        h1->maxWaterLevel = 200.0;
+        h1->waterLevel = (50.0 + 200.0) / 2;
+        h1->isActive = 0;
+        // pthread_mutex_init(&h1->thread, NULL);
         sem_init(&h1->sem, 0, 0);
         insertSorted(h1);
     }
+
     for (int i = 0; i < numH2; ++i)
     {
         HydroelectricPlant *h2 = malloc(sizeof(HydroelectricPlant));
-        *h2 = (HydroelectricPlant){"H2", H2_CAPACITY, 25.0, 100.0, 62.5, 0, PTHREAD_MUTEX_INITIALIZER};
+        if (h2 == NULL)
+        {
+            fprintf(stderr, "Error: NO se pudo reservar memoria para las centrales.\n");
+            return -1;
+        }
+
+        h2->name = "H2";
+        h2->capacity = H2_CAPACITY;
+        h2->minWaterLevel = 25.0;
+        h2->maxWaterLevel = 100.0;
+        h2->waterLevel = (25.0 + 100.0) / 2;
+        h2->isActive = 0;
+        // pthread_mutex_init(&h2->thread, NULL);
         sem_init(&h2->sem, 0, 0);
         insertSorted(h2);
     }
+
     for (int i = 0; i < numH3; ++i)
     {
         HydroelectricPlant *h3 = malloc(sizeof(HydroelectricPlant));
-        *h3 = (HydroelectricPlant){"H3", H3_CAPACITY, 10.0, 50.0, 30.0, 0, PTHREAD_MUTEX_INITIALIZER};
+        if (h3 == NULL)
+        {
+            fprintf(stderr, "Error: NO se pudo reservar memoria para las centrales.\n");
+            return -1;
+        }
 
+        h3->name = "H3";
+        h3->capacity = H3_CAPACITY;
+        h3->minWaterLevel = 10.0;
+        h3->maxWaterLevel = 50.0;
+        h3->waterLevel = (10.0 + 50.0) / 2;
+        h3->isActive = 0;
+        // pthread_mutex_init(&h3->thread, NULL);
         sem_init(&h3->sem, 0, 0);
         insertSorted(h3);
     }
@@ -166,7 +203,7 @@ int main(int argc, char *argv[])
         current = current->next;
         free(temp);
     }
-
+    printf("Programa terminado");
     return 0;
 }
 
@@ -213,9 +250,11 @@ void *hydroelectricPlantRoutine(void *arg)
         // Simulación de la operación de la central
         if (plant->isActive)
         {
+            printf(" central tipo %s activada\n", plant->name);
             pthread_mutex_lock(&energyMutex);
             totalEnergyGenerated += plant->capacity;
             pthread_mutex_unlock(&energyMutex);
+            printf("Capacidad total: %f MW/s\n", totalEnergyGenerated);
 
             // Reducir el nivel del agua debido a la generación de energía
             plant->waterLevel -= 5.0;
@@ -224,6 +263,7 @@ void *hydroelectricPlantRoutine(void *arg)
             if (plant->waterLevel < plant->minWaterLevel || plant->waterLevel > plant->maxWaterLevel)
             {
                 deactivatePlant(plant); // Esto también podría manejar la lógica del semáforo
+                printf("Desactivando central tipo %s\n", plant->name);
             }
         }
 
@@ -250,6 +290,7 @@ void *sortingThreadRoutine(void *arg)
         // Desbloquear el mutex después de terminar el ordenamiento
         pthread_mutex_unlock(&listMutex);
     }
+    printf("SORTING THREAD!!");
 
     // Limpieza y salida ordenada del hilo
     pthread_exit(NULL);
@@ -270,7 +311,7 @@ void activatePlant(HydroelectricPlant *plant)
 void insertSorted(HydroelectricPlant *plant)
 {
     HydroelectricPlantNode *newNode = malloc(sizeof(HydroelectricPlantNode));
-    newNode->plant = *plant;
+    newNode->plant = plant;
     newNode->next = NULL;
 
     pthread_mutex_lock(&listMutex);
@@ -294,18 +335,18 @@ void insertSorted(HydroelectricPlant *plant)
     pthread_mutex_unlock(&listMutex);
 }
 
-int comparePlants(HydroelectricPlant a, HydroelectricPlant b)
+int comparePlants(HydroelectricPlant *a, HydroelectricPlant *b)
 {
     // Primero comparar por capacidad
-    if (a.capacity != b.capacity)
+    if (a->capacity != b->capacity)
     {
-        return (a.capacity > b.capacity) ? -1 : 1;
+        return (a->capacity > b->capacity) ? -1 : 1;
     }
 
     // Luego por nivel de agua
-    if (a.waterLevel != b.waterLevel)
+    if (a->waterLevel != b->waterLevel)
     {
-        return (a.waterLevel > b.waterLevel) ? -1 : 1;
+        return (a->waterLevel > b->waterLevel) ? -1 : 1;
     }
 
     return 0;
@@ -358,7 +399,7 @@ void applyGreedyAlgorithm()
     // Desactivar todas las centrales primero
     while (currentNode != NULL)
     {
-        deactivatePlant(&currentNode->plant);
+        deactivatePlant(currentNode->plant);
         currentNode = currentNode->next;
     }
 
@@ -367,11 +408,11 @@ void applyGreedyAlgorithm()
     // Activar centrales de manera óptima
     while (currentNode != NULL)
     {
-        if (currentNode->plant.waterLevel > currentNode->plant.minWaterLevel &&
-            currentGeneration + currentNode->plant.capacity <= MAX_GENERATION)
+        if (currentNode->plant->waterLevel > currentNode->plant->minWaterLevel &&
+            currentGeneration + currentNode->plant->capacity <= MAX_GENERATION)
         {
-            activatePlant(&currentNode->plant);
-            currentGeneration += currentNode->plant.capacity;
+            activatePlant(currentNode->plant);
+            currentGeneration += currentNode->plant->capacity;
 
             if (currentGeneration >= MIN_GENERATION)
             {
@@ -398,7 +439,7 @@ void findOptimalCombination()
     HydroelectricPlantNode *node = head;
     while (node)
     {
-        deactivatePlant(&node->plant);
+        deactivatePlant(node->plant);
         node = node->next;
     }
 
@@ -414,10 +455,10 @@ void findOptimalCombination()
         // Activar centrales secuencialmente desde el nodo de inicio
         while (node != NULL)
         {
-            if (node->plant.waterLevel > node->plant.minWaterLevel &&
-                currentGeneration + node->plant.capacity <= MAX_GENERATION)
+            if (node->plant->waterLevel > node->plant->minWaterLevel &&
+                currentGeneration + node->plant->capacity <= MAX_GENERATION)
             {
-                currentGeneration += node->plant.capacity;
+                currentGeneration += node->plant->capacity;
 
                 if (currentGeneration >= MIN_GENERATION && currentGeneration <= MAX_GENERATION)
                 {
@@ -440,16 +481,16 @@ void findOptimalCombination()
         node = head;
         while (node != NULL)
         {
-            if (node->plant.waterLevel > node->plant.minWaterLevel &&
-                node->plant.waterLevel < node->plant.maxWaterLevel &&
-                node->plant.capacity <= MAX_GENERATION - bestGeneration)
+            if (node->plant->waterLevel > node->plant->minWaterLevel &&
+                node->plant->waterLevel < node->plant->maxWaterLevel &&
+                node->plant->capacity <= MAX_GENERATION - bestGeneration)
             {
-                activatePlant(&node->plant);
-                bestGeneration += node->plant.capacity;
+                activatePlant(node->plant);
+                bestGeneration += node->plant->capacity;
             }
             else
             {
-                deactivatePlant(&node->plant);
+                deactivatePlant(node->plant);
             }
             node = node->next;
         }
