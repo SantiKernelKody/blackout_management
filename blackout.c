@@ -10,7 +10,6 @@
 // ver si se necesita un listMutex
 // preguntar si llueve cunaod esta desactivado(semaforo)
 // hilo de impresion
-// no se esta ejecutando como debe sorting thread
 // poner mensajes cuando ya todo se murio y no se recupera
 
 // Definiciones de constantes
@@ -173,6 +172,7 @@ int main(int argc, char *argv[])
         sem_init(&h3->sem, 0, 0);
         insertSorted(h3);
     }
+
     // Greedy
     applyGreedyAlgorithm();
 
@@ -193,6 +193,7 @@ int main(int argc, char *argv[])
     {
         sem_wait(&adjustmentSemaphore);
         applyGreedyAlgorithm();
+        // ver si ordenamos antes de hacer el greedy
         sem_post(&sortingSemaphore);
     }
 
@@ -311,12 +312,13 @@ void *sortingThreadRoutine()
         // pthread_mutex_lock(&listMutex);
 
         // Ordenar la lista
+        printf("SORTING THREAD!!");
+
         sortList();
 
         // Desbloquear el mutex después de terminar el ordenamiento
         // pthread_mutex_unlock(&listMutex);
     }
-    printf("SORTING THREAD!!");
 
     // Limpieza y salida ordenada del hilo
     pthread_exit(NULL);
@@ -366,7 +368,7 @@ void insertSorted(HydroelectricPlant *plant)
 
     // pthread_mutex_unlock(&listMutex);
 }
-
+// prioridad orden de la lista
 int comparePlants(HydroelectricPlant *a, HydroelectricPlant *b)
 {
     // Primero comparar por capacidad
