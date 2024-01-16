@@ -4,15 +4,6 @@
 #include <unistd.h>
 #include <semaphore.h>
 #include <signal.h>
-// Cambios
-// asegurarse que lluevaa sin que este activada la central
-// arreglar lo que se pasa de los limites
-// ver si se necesita un listMutex
-// preguntar si llueve cunaod esta desactivado(semaforo)
-// hilo de impresion
-// no se esta ejecutando como debe sorting thread
-// poner mensajes cuando ya todo se murio y no se recupera
-
 // Definiciones de constantes
 const float H1_CAPACITY = 15.0;
 const float H2_CAPACITY = 5.0;
@@ -54,7 +45,7 @@ float totalEnergyGenerated = 0.0;
 
 // Prototipos de funciones
 void *hydroelectricPlantRoutine(void *arg);
-void *sortingThreadRoutine();
+void *sortingThreadRoutine(void *arg);
 void applyGreedyAlgorithm();
 void insertSorted(HydroelectricPlant *plant);
 int comparePlants(HydroelectricPlant *a, HydroelectricPlant *b);
@@ -67,7 +58,6 @@ void signalHandler(int sig)
     if (sig == SIGINT)
     {
         shutdownRequested = 1;
-        printf("Stopping");
     }
 }
 int main(int argc, char *argv[])
@@ -90,28 +80,19 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Error: la suma de las probabilidades debe ser 1.\n");
         return 1;
     }
-    // Calcula la capacidad total máxima
-    float totalMaxCapacity = numH1 * H1_CAPACITY + numH2 * H2_CAPACITY + numH3 * H3_CAPACITY;
-
-    // Verifica si la capacidad total es suficiente
-    if (totalMaxCapacity < MIN_GENERATION)
-    {
-        fprintf(stderr, "Error: La capacidad total máxima de %f MW/s no alcanza el mínimo requerido de %f MW/s.\n", totalMaxCapacity, MIN_GENERATION);
-        return 1;
-    }
     printf("ANtes de senal");
     // Configuración del manejador de señales
     struct sigaction sa;
-    sa.sa_handler = &signalHandler;
+    sa.sa_handler = signalHandler;
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = 0;
     sigaction(SIGINT, &sa, NULL);
 
     // Inicializar mutex y semáforos
-    // pthread_mutex_init(&listMutex, NULL);
+    pthread_mutex_init(&listMutex, NULL);
     pthread_mutex_init(&energyMutex, NULL);
-    sem_init(&adjustmentSemaphore, 0, 1);
-    sem_init(&sortingSemaphore, 0, 1);
+    sem_init(&adjustmentSemaphore, 0, 0);
+    sem_init(&sortingSemaphore, 0, 0);
 
     // Crear y añadir centrales a la lista
     for (int i = 0; i < numH1; ++i)
@@ -173,7 +154,6 @@ int main(int argc, char *argv[])
         sem_init(&h3->sem, 0, 0);
         insertSorted(h3);
     }
-    // Greedy
     applyGreedyAlgorithm();
 
     // Crear y lanzar hilos de centrales
@@ -206,20 +186,20 @@ int main(int argc, char *argv[])
     pthread_join(sortingThread, NULL);
 
     // Liberar recursos
-    // pthread_mutex_destroy(&listMutex);
+    pthread_mutex_destroy(&listMutex);
     sem_destroy(&adjustmentSemaphore);
     sem_destroy(&sortingSemaphore);
 
     current = head;
     while (current)
     {
-        // sem_destroy(&current->plant->sem);
+        sem_destroy(&current->plant->sem);
         free(current->plant);
         HydroelectricPlantNode *temp = current;
         current = current->next;
         free(temp);
     }
-    printf("Programa terminado\n");
+    printf("Programa terminado");
     return 0;
 }
 
@@ -231,38 +211,33 @@ void *hydroelectricPlantRoutine(void *arg)
 
     while (!shutdownRequested)
     {
-        // sem_wait(&plant->sem); // Esperar si la central está desactivada
+        sem_wait(&plant->sem); // Esperar si la central está desactivada
 
         if (rainDuration > 0)
         {
-            // printf("Lloviendo\n");
-            //  Incrementar el nivel del agua debido a la lluvia
+            // Incrementar el nivel del agua debido a la lluvia
             plant->waterLevel += rainIncrement;
             rainDuration--;
         }
         else
         {
-
             // Simular un nuevo evento de lluvia
             float prob = (float)rand() / RAND_MAX;
             if (prob < probA)
             {
-                // printf("NO lluvia");
-                //  No lluvia
+                // No lluvia
                 rainIncrement = NO_RAIN_INCREMENT;
                 rainDuration = NO_RAIN_DURATION;
             }
             else if (prob < probA + probB)
             {
-                // printf("Aguacero");
-                //  Aguacero
+                // Aguacero
                 rainIncrement = AGUACERO_INCREMENT;
                 rainDuration = AGUACERO_DURATION;
             }
             else
             {
-                // printf("Diluvio");
-                //  Diluvio
+                // Diluvio
                 rainIncrement = DILUVIO_INCREMENT;
                 rainDuration = DILUVIO_DURATION;
             }
@@ -271,10 +246,10 @@ void *hydroelectricPlantRoutine(void *arg)
         // Simulación de la operación de la central
         if (plant->isActive)
         {
-            printf(" central tipo %s activada, water level: %f\n", plant->name, plant->waterLevel);
-            /*pthread_mutex_lock(&energyMutex);
+            printf(" central tipo %s activada\n", plant->name);
+            pthread_mutex_lock(&energyMutex);
             totalEnergyGenerated += plant->capacity;
-            pthread_mutex_unlock(&energyMutex);*/
+            pthread_mutex_unlock(&energyMutex);
             printf("Capacidad total: %f MW/s\n", totalEnergyGenerated);
 
             // Reducir el nivel del agua debido a la generación de energía
@@ -284,13 +259,8 @@ void *hydroelectricPlantRoutine(void *arg)
             if (plant->waterLevel < plant->minWaterLevel || plant->waterLevel > plant->maxWaterLevel)
             {
                 deactivatePlant(plant); // Esto también podría manejar la lógica del semáforo
-                sem_post(&adjustmentSemaphore);
                 printf("Desactivando central tipo %s\n", plant->name);
             }
-        }
-        if (!plant->isActive && plant->waterLevel > plant->maxWaterLevel)
-        {
-            plant->waterLevel -= 5.0;
         }
 
         sleep(1); // Esperar un segundo antes de la próxima iteración
@@ -300,7 +270,7 @@ void *hydroelectricPlantRoutine(void *arg)
     pthread_exit(NULL);
     return NULL;
 }
-void *sortingThreadRoutine()
+void *sortingThreadRoutine(void *arg)
 {
     while (!shutdownRequested)
     {
@@ -308,13 +278,13 @@ void *sortingThreadRoutine()
         sem_wait(&sortingSemaphore);
 
         // Bloquear el mutex para asegurar el acceso exclusivo a la lista
-        // pthread_mutex_lock(&listMutex);
+        pthread_mutex_lock(&listMutex);
 
         // Ordenar la lista
         sortList();
 
         // Desbloquear el mutex después de terminar el ordenamiento
-        // pthread_mutex_unlock(&listMutex);
+        pthread_mutex_unlock(&listMutex);
     }
     printf("SORTING THREAD!!");
 
@@ -326,18 +296,12 @@ void *sortingThreadRoutine()
 void deactivatePlant(HydroelectricPlant *plant)
 {
     plant->isActive = 0;
-    pthread_mutex_lock(&energyMutex);
-    totalEnergyGenerated -= plant->capacity;
-    pthread_mutex_unlock(&energyMutex);
     // Aquí no se envía una señal al semáforo; la central se pausará automáticamente en la próxima iteración
 }
 void activatePlant(HydroelectricPlant *plant)
 {
     plant->isActive = 1;
-    pthread_mutex_lock(&energyMutex);
-    totalEnergyGenerated += plant->capacity;
-    pthread_mutex_unlock(&energyMutex);
-    // sem_post(&plant->sem); // "Activar" la central enviando una señal al semáforo
+    sem_post(&plant->sem); // "Activar" la central enviando una señal al semáforo
 }
 
 void insertSorted(HydroelectricPlant *plant)
@@ -346,7 +310,7 @@ void insertSorted(HydroelectricPlant *plant)
     newNode->plant = plant;
     newNode->next = NULL;
 
-    // pthread_mutex_lock(&listMutex);
+    pthread_mutex_lock(&listMutex);
 
     if (head == NULL || comparePlants(newNode->plant, head->plant) > 0)
     {
@@ -364,7 +328,7 @@ void insertSorted(HydroelectricPlant *plant)
         current->next = newNode;
     }
 
-    // pthread_mutex_unlock(&listMutex);
+    pthread_mutex_unlock(&listMutex);
 }
 
 int comparePlants(HydroelectricPlant *a, HydroelectricPlant *b)
@@ -423,11 +387,17 @@ void sortList()
 
 void applyGreedyAlgorithm()
 {
-    // pthread_mutex_lock(&listMutex);
-    printf("GREEDY!!");
+    pthread_mutex_lock(&listMutex);
 
-    float currentGeneration = totalEnergyGenerated;
+    float currentGeneration = 0.0;
     HydroelectricPlantNode *currentNode = head;
+
+    // Desactivar todas las centrales primero
+    while (currentNode != NULL)
+    {
+        deactivatePlant(currentNode->plant);
+        currentNode = currentNode->next;
+    }
 
     currentNode = head;
 
@@ -451,15 +421,15 @@ void applyGreedyAlgorithm()
     // Si no se alcanza la generación mínima, buscar una combinación óptima
     if (currentGeneration < MIN_GENERATION || currentGeneration > MAX_GENERATION)
     {
-        // findOptimalCombination();
+        findOptimalCombination();
     }
 
-    // pthread_mutex_unlock(&listMutex);
+    pthread_mutex_unlock(&listMutex);
 }
 
 void findOptimalCombination()
 {
-    // pthread_mutex_lock(&listMutex);
+    pthread_mutex_lock(&listMutex);
 
     // Desactivar todas las centrales primero
     HydroelectricPlantNode *node = head;
@@ -522,5 +492,5 @@ void findOptimalCombination()
         }
     }
 
-    // pthread_mutex_unlock(&listMutex);
+    pthread_mutex_unlock(&listMutex);
 }

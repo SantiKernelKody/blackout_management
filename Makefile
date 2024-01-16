@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-pthread -Wall
+CFLAGS=-pthread
 
 blackout: blackout.c
 	$(CC) $(CFLAGS) blackout.c -o blackout
