@@ -1,3 +1,4 @@
+#include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
@@ -11,6 +12,14 @@
 // preguntar si llueve cunaod esta desactivado(semaforo)
 // hilo de impresion
 // poner mensajes cuando ya todo se murio y no se recupera
+// Definición de colores
+const char *c_red = "\033[31m";
+const char *c_green = "\033[32m";
+const char *c_blue = "\033[34m";
+const char *c_magenta = "\033[35m";
+const char *c_white = "\033[37m";
+const char *c_yellow = "\033[33m";
+const char *c_end = "\033[0m";
 
 // Definiciones de constantes
 const float H1_CAPACITY = 15.0;
@@ -52,6 +61,7 @@ float probA, probB, probC;
 float totalEnergyGenerated = 0.0;
 
 // Prototipos de funciones
+void createAndInsertPlants(int numPlants, const char *plantType, float capacity, float minWaterLevel, float maxWaterLevel);
 void *hydroelectricPlantRoutine(void *arg);
 void *sortingThreadRoutine();
 void applyGreedyAlgorithm();
@@ -113,65 +123,10 @@ int main(int argc, char *argv[])
     sem_init(&sortingSemaphore, 0, 1);
 
     // Crear y añadir centrales a la lista
-    for (int i = 0; i < numH1; ++i)
-    {
-        HydroelectricPlant *h1 = malloc(sizeof(HydroelectricPlant));
-        if (h1 == NULL)
-        {
-            fprintf(stderr, "Error: NO se pudo reservar memoria para las centrales.\n");
-            return -1;
-        }
-
-        h1->name = "H1";
-        h1->capacity = H1_CAPACITY;
-        h1->minWaterLevel = 50.0;
-        h1->maxWaterLevel = 200.0;
-        h1->waterLevel = (50.0 + 200.0) / 2;
-        h1->isActive = 0;
-        // pthread_mutex_init(&h1->thread, NULL);
-        sem_init(&h1->sem, 0, 0);
-        insertSorted(h1);
-    }
-
-    for (int i = 0; i < numH2; ++i)
-    {
-        HydroelectricPlant *h2 = malloc(sizeof(HydroelectricPlant));
-        if (h2 == NULL)
-        {
-            fprintf(stderr, "Error: NO se pudo reservar memoria para las centrales.\n");
-            return -1;
-        }
-
-        h2->name = "H2";
-        h2->capacity = H2_CAPACITY;
-        h2->minWaterLevel = 25.0;
-        h2->maxWaterLevel = 100.0;
-        h2->waterLevel = (25.0 + 100.0) / 2;
-        h2->isActive = 0;
-        // pthread_mutex_init(&h2->thread, NULL);
-        sem_init(&h2->sem, 0, 0);
-        insertSorted(h2);
-    }
-
-    for (int i = 0; i < numH3; ++i)
-    {
-        HydroelectricPlant *h3 = malloc(sizeof(HydroelectricPlant));
-        if (h3 == NULL)
-        {
-            fprintf(stderr, "Error: NO se pudo reservar memoria para las centrales.\n");
-            return -1;
-        }
-
-        h3->name = "H3";
-        h3->capacity = H3_CAPACITY;
-        h3->minWaterLevel = 10.0;
-        h3->maxWaterLevel = 50.0;
-        h3->waterLevel = (10.0 + 50.0) / 2;
-        h3->isActive = 0;
-        // pthread_mutex_init(&h3->thread, NULL);
-        sem_init(&h3->sem, 0, 0);
-        insertSorted(h3);
-    }
+    // BUscar trabajar con affinidad
+    createAndInsertPlants(numH1, "H1", H1_CAPACITY, 50.0, 200.0);
+    createAndInsertPlants(numH2, "H2", H2_CAPACITY, 25.0, 100.0);
+    createAndInsertPlants(numH3, "H3", H3_CAPACITY, 10.0, 50.0);
 
     // Greedy
     applyGreedyAlgorithm();
@@ -193,7 +148,8 @@ int main(int argc, char *argv[])
     {
         sem_wait(&adjustmentSemaphore);
         applyGreedyAlgorithm();
-        // ver si ordenamos antes de hacer el greedy
+        // no se lo puede mover antes que el greesy porque a lo que uno trata de recorrer la lista el otro la mueve
+        // y si se queda en un puntero que el sorting lo vuelve a poner primero le toca recorrer toda la lista de nuevo
         sem_post(&sortingSemaphore);
     }
 
@@ -222,6 +178,29 @@ int main(int argc, char *argv[])
     }
     printf("Programa terminado\n");
     return 0;
+}
+void createAndInsertPlants(int numPlants, const char *plantType, float capacity, float minWaterLevel, float maxWaterLevel)
+{
+    for (int i = 0; i < numPlants; ++i)
+    {
+        HydroelectricPlant *plant = malloc(sizeof(HydroelectricPlant));
+        if (plant == NULL)
+        {
+            fprintf(stderr, "Error: NO se pudo reservar memoria para las centrales.\n");
+            exit(-1); // Cambiado a exit para salir del programa completamente
+        }
+
+        char nameBuffer[15];
+        sprintf(nameBuffer, "ID_%d_%s", i, plantType);
+        plant->name = strdup(nameBuffer);
+        plant->capacity = capacity;
+        plant->minWaterLevel = minWaterLevel;
+        plant->maxWaterLevel = maxWaterLevel;
+        plant->waterLevel = (minWaterLevel + maxWaterLevel) / 2;
+        plant->isActive = 0;
+        sem_init(&plant->sem, 0, 0);
+        insertSorted(plant);
+    }
 }
 
 void *hydroelectricPlantRoutine(void *arg)
@@ -273,10 +252,7 @@ void *hydroelectricPlantRoutine(void *arg)
         if (plant->isActive)
         {
             printf(" central tipo %s activada, water level: %f\n", plant->name, plant->waterLevel);
-            /*pthread_mutex_lock(&energyMutex);
-            totalEnergyGenerated += plant->capacity;
-            pthread_mutex_unlock(&energyMutex);*/
-            printf("Capacidad total: %f MW/s\n", totalEnergyGenerated);
+            printf("%sA%s %sCapacidad total: %f MW/s%s\n", c_magenta, c_end, c_red, totalEnergyGenerated, c_end);
 
             // Reducir el nivel del agua debido a la generación de energía
             plant->waterLevel -= 5.0;
@@ -374,13 +350,15 @@ int comparePlants(HydroelectricPlant *a, HydroelectricPlant *b)
     // Primero comparar por capacidad
     if (a->capacity != b->capacity)
     {
-        return (a->capacity > b->capacity) ? -1 : 1;
+        return (a->capacity > b->capacity) ? 1 : -1;
     }
 
     // Luego por nivel de agua
     if (a->waterLevel != b->waterLevel)
     {
-        return (a->waterLevel > b->waterLevel) ? -1 : 1;
+        float relative_level_a = (a->waterLevel - a->minWaterLevel) / (a->maxWaterLevel - a->minWaterLevel);
+        float relative_level_b = (b->waterLevel - b->minWaterLevel) / (b->maxWaterLevel - b->minWaterLevel);
+        return (relative_level_a > relative_level_b) ? 1 : -1;
     }
 
     return 0;
