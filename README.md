@@ -1,5 +1,5 @@
 # Hydroelectric Plant Simulation Project
-
+<p align="center"><img src="hplant.png" style="width:500px; margin:0 auto;" alt="Hydroelectric plant image explanation"></p>
 ## Overview
 
 This project simulates the operation of a hydroelectric power plant system. It utilizes concurrent programming techniques to manage multiple hydroelectric plants and optimizes system efficiency through parallel execution and CPU affinity. The simulation includes random weather events affecting water levels and dynamic activation and deactivation of plants based on capacity and water levels.
