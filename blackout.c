@@ -21,7 +21,7 @@ const char *c_yellow = "\033[33m";
 const char *c_cian = "\033[36m";
 const char *c_end = "\033[0m";
 const char *c_orange = "\033[0;33m";
-const char *c_pink = "";
+const char *c_pink = "\033[95m";
 
 // Constants
 const float H1_CAPACITY = 15.0;
@@ -309,7 +309,7 @@ void *hydroelectricPlantRoutine(void *arg)
             {
                 deactivatePlant(plant);
                 sem_post(&adjustmentSemaphore);
-                printf("Deactivating plant %s\n", plant->name);
+                printf("%sDeactivating plant %s.%s\n", c_red, plant->name, c_end);
             }
         }
 
