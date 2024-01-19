@@ -10,12 +10,6 @@
 #include <semaphore.h>
 #include <signal.h>
 #include <sched.h>
-// Cambios
-// arreglar lo que se pasa de los limites
-// hilo de impresion
-// poner mensajes cuando ya todo se murio y no se recupera
-
-// Explicaiones en la central H2 los valores son fraccionales por sacarle la mitad
 
 // Definición de colores
 const char *c_red = "\033[31m";
@@ -26,6 +20,7 @@ const char *c_white = "\033[37m";
 const char *c_yellow = "\033[33m";
 const char *c_cian = "\033[36m";
 const char *c_end = "\033[0m";
+const char *c_orange = "\033[0;33m";
 
 // Definiciones de constantes
 const float H1_CAPACITY = 15.0;
@@ -85,6 +80,7 @@ void signalHandler(int sig)
     if (sig == SIGINT)
     {
         shutdownRequested = 1;
+        printf("%s\nCerrando programa senal de cierre recibida***\n%s", c_red, c_end);
     }
 }
 int main(int argc, char *argv[])
@@ -127,7 +123,7 @@ int main(int argc, char *argv[])
     // pthread_mutex_init(&listMutex, NULL);
     pthread_mutex_init(&energyMutex, NULL);
     sem_init(&adjustmentSemaphore, 0, 0);
-    sem_init(&sortingSemaphore, 0, 1);
+    sem_init(&sortingSemaphore, 0, 0);
 
     // Crear y añadir centrales a la lista
     createAndInsertPlants(numH1, "H1", H1_CAPACITY, 50.0, 200.0);
@@ -165,6 +161,7 @@ int main(int argc, char *argv[])
         sem_wait(&adjustmentSemaphore);
         printf("%sCapacidad ajuste requerido: %f MW/s%s\n", c_yellow, totalEnergyGenerated, c_end);
         applyGreedyAlgorithm();
+
         printf("%sCapacidad ajustada: %f MW/s%s\n", c_green, totalEnergyGenerated, c_end);
         // no se lo puede mover antes que el greesy porque a lo que uno trata de recorrer la lista el otro la mueve
         // y si se queda en un puntero que el sorting lo vuelve a poner primero le toca recorrer toda la lista de nuevo
@@ -192,7 +189,6 @@ int main(int argc, char *argv[])
         current = current->next;
         free(temp);
     }
-    printf("Programa terminado\n");
     return 0;
 }
 void createAndInsertPlants(int numPlants, const char *plantType, float capacity, float minWaterLevel, float maxWaterLevel)
@@ -258,7 +254,8 @@ void *hydroelectricPlantRoutine(void *arg)
         {
             // Reducir el nivel del agua debido a la generación de energía
             plant->waterLevel -= 5.0;
-            printf("%s %s %s Central %s - water_level: %f.\n", c_cian, rain_type, c_end, plant->name, plant->waterLevel);
+            float water_flow = rainIncrement - 5;
+            printf("%s %s %s Central %s - water_level: %.2f - water_flow: %.2f m/s.\n", c_cian, rain_type, c_end, plant->name, plant->waterLevel, water_flow);
 
             // Desactivar la central si el nivel de agua está fuera de los límites
             if (plant->waterLevel <= plant->minWaterLevel || plant->waterLevel >= plant->maxWaterLevel)
@@ -283,10 +280,10 @@ void *sortingThreadRoutine()
 {
     while (!shutdownRequested)
     {
+        printf("%sExcecuting sorting thread.%s\n", c_magenta, c_end);
+        sortList();
         // Esperar una señal para comenzar el ordenamiento
         sem_wait(&sortingSemaphore);
-        printf("SORTING THREAD!!\n");
-        sortList();
     }
     // Limpieza y salida ordenada del hilo
     pthread_exit(NULL);
@@ -387,7 +384,7 @@ void sortList()
 
 bool applyGreedyAlgorithm()
 {
-    printf("GREEDY!!\n");
+    printf("Applying greedy algorithm.\n");
 
     float currentGeneration = totalEnergyGenerated;
     HydroelectricPlantNode *currentNode = head;
@@ -410,12 +407,11 @@ bool applyGreedyAlgorithm()
         }
         currentNode = currentNode->next;
     }
-
     if (lastShots > 1)
     {
         waitingForRecover = true;
         lastShots -= 1;
-        printf("Last shoot %i\n", lastShots);
+        printf("%sALERTA: comenzando intentos de recuperacion antes de cierre inmediato - %i.%s\n", c_red, lastShots, c_end);
         sleep(1);
         return applyGreedyAlgorithm();
     }
