@@ -300,17 +300,18 @@ void *hydroelectricPlantRoutine(void *arg)
         // Simulate plant operation if active and not in recovery mode
         if (plant->isActive && !waitingForRecover)
         {
-            plant->waterLevel -= 5.0;             // Reduce water level due to energy generation
-            float water_flow = rainIncrement - 5; // Calculate net water flow
-            printf("%s %s %s Central %s - water_level: %.2f - water_flow: %.2f m/s.\n", c_cian, rain_type, c_end, plant->name, plant->waterLevel, water_flow);
-
             // Deactivate plant if water level is out of bounds
-            if (plant->waterLevel <= plant->minWaterLevel || plant->waterLevel >= plant->maxWaterLevel)
+            if (plant->waterLevel - 5.0 < plant->minWaterLevel || plant->waterLevel - 5.0 > plant->maxWaterLevel)
             {
                 deactivatePlant(plant);
                 sem_post(&adjustmentSemaphore);
                 printf("%sDeactivating plant %s.%s\n", c_red, plant->name, c_end);
+                sleep(1);
+                continue;
             }
+            plant->waterLevel -= 5.0;             // Reduce water level due to energy generation
+            float water_flow = rainIncrement - 5; // Calculate net water flow
+            printf("%s %s %s Central %s - water_level: %.2f - water_flow: %.2f m/s.\n", c_cian, rain_type, c_end, plant->name, plant->waterLevel, water_flow);
         }
 
         // Handle excess water if plant is inactive
@@ -338,7 +339,7 @@ void *sortingThreadRoutine()
     while (!shutdownRequested)
     {
         // Notify about sorting operation execution
-        printf("%sExecuting sorting thread.%s\n", c_magenta, c_end);
+        // printf("%sExecuting sorting thread.%s\n", c_magenta, c_end);
         // Sort the list of hydroelectric plants
         sortList();
         // Wait for a signal to start the sorting
@@ -423,17 +424,17 @@ void insertSorted(HydroelectricPlant *plant)
  */
 int comparePlants(HydroelectricPlant *a, HydroelectricPlant *b)
 {
-    // Compare based on capacity
-    if (a->capacity != b->capacity)
-    {
-        return (a->capacity > b->capacity) ? 1 : -1;
-    }
     // Then compare based on relative water level
     if (a->waterLevel != b->waterLevel)
     {
         float relative_level_a = (a->waterLevel - a->minWaterLevel) / (a->maxWaterLevel - a->minWaterLevel);
         float relative_level_b = (b->waterLevel - b->minWaterLevel) / (b->maxWaterLevel - b->minWaterLevel);
         return (relative_level_a > relative_level_b) ? 1 : -1;
+    }
+    // Compare based on capacity
+    if (a->capacity != b->capacity)
+    {
+        return (a->capacity > b->capacity) ? 1 : -1;
     }
     return 0;
 }
@@ -513,7 +514,7 @@ bool applyGreedyAlgorithm()
         }
         currentNode = currentNode->next;
     }
-    if (lastShots > 1)
+    if (lastShots > 0)
     {
         waitingForRecover = true;
         lastShots -= 1;
