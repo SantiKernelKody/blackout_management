@@ -35,10 +35,11 @@ This project simulates the operation of a hydroelectric power plant system. It u
    Once compiled, you can run the program using the command with appropriate arguments for probabilities and the number of plants for each type:
 
     ```bash
+    $ ./blackout prob_no_rain prob_downpour prob_rain_shower num_h1 num_h2 num_h3
     $ ./blackout 0.9 0.05 0.05 10 10 30
     ```
 
-   This command runs the simulation with specified probabilities for weather events and a given number of hydroelectric plants of types H1, H2, and H3.
+   This command runs the simulation with specified probabilities prob_no_rain, prob_downpour, prob_rain_shower for weather events and a given number of hydroelectric plants of types H1, H2, and H3.
 
 ### Key Components
 
